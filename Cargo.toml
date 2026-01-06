@@ -1,0 +1,29 @@
+[package]
+name = "swc-plugin-transform-async-to-ng-generator"
+version = "0.2.0"
+edition = "2021"
+description = "SWC plugin to transform async functions to ng-generator functions for AngularJS $q compatibility"
+license = "MIT"
+authors = ["Alvin Huang"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+swc_core = { version = "54.0.0", features = [
+    "ecma_plugin_transform",
+    "ecma_ast",
+    "ecma_visit",
+    "ecma_utils",
+    "common",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+lto = "thin"
+opt-level = "z"
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0

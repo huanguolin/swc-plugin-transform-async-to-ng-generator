@@ -1,0 +1,29 @@
+{
+  "name": "swc-plugin-transform-async-to-ng-generator",
+  "version": "0.2.0",
+  "description": "SWC plugin to transform async functions to ng-generator functions for AngularJS $q compatibility",
+  "main": "target/wasm32-wasip1/release/swc_plugin_transform_async_to_ng_generator.wasm",
+  "scripts": {
+    "build": "cargo build --target wasm32-wasip1 --release",
+    "build:debug": "cargo build --target wasm32-wasip1",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "swc-plugin",
+    "swc",
+    "async",
+    "await",
+    "angularjs",
+    "generator"
+  ],
+  "author": "Alvin Huang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/swc-plugin-transform-async-to-ng-generator"
+  },
+  "files": [
+    "target/wasm32-wasip1/release/swc_plugin_transform_async_to_ng_generator.wasm"
+  ],
+  "preferUnplugged": true
+}
