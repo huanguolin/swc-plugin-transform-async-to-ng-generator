@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use swc_core::{
-    common::{util::take::Take, Span, SyntaxContext, DUMMY_SP},
+    common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::*,
         atoms::Atom,
@@ -33,16 +33,6 @@ impl IdCounter {
         self.count += 1;
         create_ident(&name)
     }
-
-    fn next_param(&mut self) -> Ident {
-        let name = if self.count == 0 {
-            "_x".to_string()
-        } else {
-            format!("_x{}", self.count)
-        };
-        self.count += 1;
-        create_ident(&name)
-    }
 }
 
 /// Main visitor that transforms async functions
@@ -51,8 +41,6 @@ pub struct AsyncToNgGeneratorVisitor {
     hoisted_funcs: Vec<Stmt>,
     /// Counter for generating unique variable names
     ref_counter: IdCounter,
-    /// Counter for generating unique parameter names
-    param_counter: IdCounter,
 }
 
 impl AsyncToNgGeneratorVisitor {
@@ -60,7 +48,6 @@ impl AsyncToNgGeneratorVisitor {
         Self {
             hoisted_funcs: Vec::new(),
             ref_counter: IdCounter::new(),
-            param_counter: IdCounter::new(),
         }
     }
 }
@@ -406,9 +393,9 @@ impl VisitMut for AsyncToNgGeneratorVisitor {
         match expr {
             // async () => { ... } or async function() { ... }
             Expr::Arrow(arrow) if arrow.is_async => {
-                let body = match &mut arrow.body {
-                    box BlockStmtOrExpr::BlockStmt(block) => block.take(),
-                    box BlockStmtOrExpr::Expr(e) => {
+                let body = match &mut *arrow.body {
+                    BlockStmtOrExpr::BlockStmt(block) => block.take(),
+                    BlockStmtOrExpr::Expr(e) => {
                         // Convert expression body to block with return
                         BlockStmt {
                             span: DUMMY_SP,

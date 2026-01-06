@@ -1361,7 +1361,6 @@ name = "swc-plugin-transform-async-to-ng-generator"
 version = "0.2.0"
 dependencies = [
  "serde",
- "serde_json",
  "swc_core",
 ]
 
@@ -1436,7 +1435,6 @@ dependencies = [
  "swc_ecma_ast",
  "swc_ecma_transforms_base",
  "swc_ecma_transforms_testing",
- "swc_ecma_utils",
  "swc_ecma_visit",
  "swc_plugin",
  "swc_plugin_macro",
