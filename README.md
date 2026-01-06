@@ -103,12 +103,24 @@ class Service {
 ## Building
 
 ```bash
-# Install Rust and wasm32-wasip1 target
+# Install Rust (stable) and wasm32-wasip1 target
 rustup target add wasm32-wasip1
 
 # Build
-cargo build-wasip1 --release
+npm run build
 ```
+
+The output wasm file will be at `target/wasm32-wasip1/release/swc_plugin_transform_async_to_ng_generator.wasm`.
+
+### Upgrading Dependencies
+
+When upgrading Rust dependencies (e.g., updating `swc_core` version in `Cargo.toml`), you need to temporarily disable offline mode:
+
+```bash
+CARGO_NET_OFFLINE=false cargo build --target wasm32-wasip1 --release
+```
+
+This allows Cargo to fetch new crate versions from the registry.
 
 ## Compatibility
 
