@@ -192,9 +192,13 @@ impl VisitMut for ThisCaptureVisitor {
         expr.visit_mut_children_with(self);
     }
 
-    // Don't descend into nested functions - they have their own `this` context
+    // Don't descend into nested regular functions - they have their own `this` context
     fn visit_mut_function(&mut self, _: &mut Function) {}
-    fn visit_mut_arrow_expr(&mut self, _: &mut ArrowExpr) {}
+
+    // DO descend into arrow functions - they inherit `this` from the outer scope
+    fn visit_mut_arrow_expr(&mut self, arrow: &mut ArrowExpr) {
+        arrow.visit_mut_children_with(self);
+    }
 }
 
 /// Create a generator function from an async function body.
