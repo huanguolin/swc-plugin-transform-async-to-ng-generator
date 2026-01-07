@@ -184,3 +184,43 @@ pub fn assign_expr(left: &str, right: Expr) -> Expr {
 pub fn iife(stmts: Vec<Stmt>) -> Expr {
     immediate_call(regular_fn_expr(None, block(stmts)))
 }
+
+/// Create an IIFE with `this` captured as a parameter:
+/// `(function(_this) { ...stmts })(this)`
+///
+/// This is used for arrow functions that use `this`, to capture the lexical `this`
+/// at the definition site.
+pub fn iife_with_this_param(stmts: Vec<Stmt>) -> Expr {
+    let func = Expr::Fn(FnExpr {
+        ident: None,
+        function: Box::new(Function {
+            params: vec![Param {
+                span: DUMMY_SP,
+                decorators: vec![],
+                pat: Pat::Ident(binding_ident("_this")),
+            }],
+            decorators: vec![],
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            body: Some(block(stmts)),
+            is_generator: false,
+            is_async: false,
+            type_params: None,
+            return_type: None,
+        }),
+    });
+
+    // Call with `this` as argument: (function(_this) { ... })(this)
+    call_expr(func, vec![Expr::This(ThisExpr { span: DUMMY_SP })])
+}
+
+/// Create: `wrapper.apply(_this, arguments)` - for arrow functions with captured this
+pub fn apply_call_with_captured_this(wrapper: Expr) -> Expr {
+    call_expr(
+        member_expr(wrapper, "apply"),
+        vec![
+            Expr::Ident(ident("_this")),
+            Expr::Ident(ident("arguments")),
+        ],
+    )
+}

@@ -96,6 +96,63 @@ impl Visit for HasAwaitVisitor {
 }
 
 // ============================================================================
+// HasThisVisitor - Check if function body uses `this`
+// ============================================================================
+
+/// Visitor that checks if a function body uses `this`.
+///
+/// This is used to determine if we need to capture `this` for arrow functions.
+/// Arrow functions have lexical `this` binding, so we need to capture it
+/// at the definition site.
+pub struct HasThisVisitor {
+    /// Whether any `this` references were found.
+    pub has_this: bool,
+}
+
+impl HasThisVisitor {
+    pub fn new() -> Self {
+        Self { has_this: false }
+    }
+
+    /// Check if the given block statement uses `this`.
+    pub fn check(body: &BlockStmt) -> bool {
+        let mut visitor = Self::new();
+        body.visit_with(&mut visitor);
+        visitor.has_this
+    }
+}
+
+impl Default for HasThisVisitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Visit for HasThisVisitor {
+    noop_visit_type!();
+
+    fn visit_expr(&mut self, expr: &Expr) {
+        // If we already found a this, no need to continue
+        if self.has_this {
+            return;
+        }
+
+        // Check if this is a `this` expression
+        if matches!(expr, Expr::This(_)) {
+            self.has_this = true;
+            return;
+        }
+
+        // Recursively visit children
+        expr.visit_children_with(self);
+    }
+
+    // Don't descend into nested regular functions - they have their own `this` context
+    // But DO descend into arrow functions - they inherit `this` from outer scope
+    fn visit_function(&mut self, _: &Function) {}
+}
+
+// ============================================================================
 // ThisCaptureVisitor - Capture this references
 // ============================================================================
 
