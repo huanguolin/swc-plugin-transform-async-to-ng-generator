@@ -30,7 +30,7 @@ use swc_core::{
 
 use crate::ast_builders::{
     apply_call, block, generator_fn_expr, ident, iife, ng_async_wrapper,
-    regular_fn_expr, return_stmt, var_decl,
+    regular_fn_expr, return_stmt, this_capture, var_decl,
 };
 use super::helpers::{create_generator_function, HasAwaitVisitor};
 
@@ -83,24 +83,33 @@ pub fn transform_arrow_fn(arrow: &mut ArrowExpr, ref_name: &str) -> Option<Expr>
         })
         .collect();
 
-    // Create the generator function
-    let (generator_func, _) = create_generator_function(params, body, false);
+    // Create the generator function (capture this for arrow functions)
+    let (generator_func, needs_this) = create_generator_function(params, body, true);
     let generator_expr = generator_fn_expr(generator_func.params, generator_func.body.unwrap());
 
     // Build the IIFE:
     // (function() {
+    //     var _this = this;  // only if needed
     //     var _ref = _ngAsyncToGenerator(function* () { ... });
     //     return function() { return _ref.apply(this, arguments); };
     // })()
-    Some(iife(vec![
-        // var _ref = _ngAsyncToGenerator(function* () { ... });
-        var_decl(ref_name, ng_async_wrapper(generator_expr)),
-        // return function() { return _ref.apply(this, arguments); };
-        return_stmt(regular_fn_expr(
-            None,
-            block(vec![return_stmt(apply_call(Expr::Ident(ident(ref_name))))]),
-        )),
-    ]))
+    let mut iife_stmts = Vec::new();
+
+    // Add `var _this = this;` if the arrow function uses `this`
+    if needs_this {
+        iife_stmts.push(this_capture());
+    }
+
+    // var _ref = _ngAsyncToGenerator(function* () { ... });
+    iife_stmts.push(var_decl(ref_name, ng_async_wrapper(generator_expr)));
+
+    // return function() { return _ref.apply(this, arguments); };
+    iife_stmts.push(return_stmt(regular_fn_expr(
+        None,
+        block(vec![return_stmt(apply_call(Expr::Ident(ident(ref_name))))]),
+    )));
+
+    Some(iife(iife_stmts))
 }
 
 /// Transform an async function expression.
