@@ -1,6 +1,6 @@
 [package]
 name = "swc-plugin-transform-async-to-ng-generator"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "SWC plugin to transform async functions to ng-generator functions for AngularJS $q compatibility"
 license = "MIT"

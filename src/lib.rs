@@ -36,9 +36,14 @@ impl IdCounter {
 }
 
 /// Main visitor that transforms async functions
+///
+/// Uses a scope stack to properly track which helper functions belong to which scope.
+/// This prevents helper functions from being incorrectly hoisted into nested scopes.
 pub struct AsyncToNgGeneratorVisitor {
-    /// Hoisted helper functions to be added at the top level
-    hoisted_funcs: Vec<Stmt>,
+    /// Stack of hoisted helper functions for each scope level.
+    /// Each entry in the stack represents a scope (module, function body, block, etc.)
+    /// and contains the helper functions that should be inserted at that scope level.
+    hoisted_funcs_stack: Vec<Vec<Stmt>>,
     /// Counter for generating unique variable names
     ref_counter: IdCounter,
 }
@@ -46,9 +51,27 @@ pub struct AsyncToNgGeneratorVisitor {
 impl AsyncToNgGeneratorVisitor {
     pub fn new() -> Self {
         Self {
-            hoisted_funcs: Vec::new(),
+            // Start with one empty scope for the top level
+            hoisted_funcs_stack: vec![Vec::new()],
             ref_counter: IdCounter::new(),
         }
+    }
+
+    /// Push a helper function to the current (innermost) scope
+    fn push_hoisted(&mut self, stmt: Stmt) {
+        if let Some(current) = self.hoisted_funcs_stack.last_mut() {
+            current.push(stmt);
+        }
+    }
+
+    /// Enter a new scope
+    fn enter_scope(&mut self) {
+        self.hoisted_funcs_stack.push(Vec::new());
+    }
+
+    /// Exit the current scope and return its hoisted functions
+    fn exit_scope(&mut self) -> Vec<Stmt> {
+        self.hoisted_funcs_stack.pop().unwrap_or_default()
     }
 }
 
@@ -277,64 +300,84 @@ fn create_helper_function(helper_name: &str, generator_func: Function) -> FnDecl
     }
 }
 
+/// Insert hoisted functions after the last function declaration in the list
+fn insert_hoisted_stmts(stmts: &mut Vec<Stmt>, hoisted: Vec<Stmt>) {
+    if hoisted.is_empty() {
+        return;
+    }
+
+    // Find the position after the last function declaration
+    let mut insert_pos = 0;
+    for (i, stmt) in stmts.iter().enumerate() {
+        if matches!(stmt, Stmt::Decl(Decl::Fn(_))) {
+            insert_pos = i + 1;
+        }
+    }
+
+    // Insert hoisted functions
+    for (i, func) in hoisted.into_iter().enumerate() {
+        stmts.insert(insert_pos + i, func);
+    }
+}
+
+/// Insert hoisted functions after the last function declaration in module items
+fn insert_hoisted_module_items(items: &mut Vec<ModuleItem>, hoisted: Vec<Stmt>) {
+    if hoisted.is_empty() {
+        return;
+    }
+
+    let hoisted_items: Vec<ModuleItem> = hoisted.into_iter().map(ModuleItem::Stmt).collect();
+
+    // Find the position after the last function declaration
+    let mut insert_pos = 0;
+    for (i, item) in items.iter().enumerate() {
+        if matches!(
+            item,
+            ModuleItem::Stmt(Stmt::Decl(Decl::Fn(_)))
+                | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+                    decl: Decl::Fn(_),
+                    ..
+                }))
+        ) {
+            insert_pos = i + 1;
+        }
+    }
+
+    // Insert hoisted functions
+    for (i, func) in hoisted_items.into_iter().enumerate() {
+        items.insert(insert_pos + i, func);
+    }
+}
+
 impl VisitMut for AsyncToNgGeneratorVisitor {
     noop_visit_mut_type!();
 
     fn visit_mut_module_items(&mut self, items: &mut Vec<ModuleItem>) {
-        // First pass: visit all items
+        // Enter a new scope for module level
+        self.enter_scope();
+
+        // Visit all items
         for item in items.iter_mut() {
             item.visit_mut_with(self);
         }
 
-        // Second pass: insert hoisted functions after the original declarations
-        if !self.hoisted_funcs.is_empty() {
-            let hoisted: Vec<ModuleItem> = self
-                .hoisted_funcs
-                .drain(..)
-                .map(ModuleItem::Stmt)
-                .collect();
-
-            // Find the position after the last function declaration or at the beginning
-            let mut insert_pos = 0;
-            for (i, item) in items.iter().enumerate() {
-                if matches!(
-                    item,
-                    ModuleItem::Stmt(Stmt::Decl(Decl::Fn(_)))
-                        | ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-                            decl: Decl::Fn(_),
-                            ..
-                        }))
-                ) {
-                    insert_pos = i + 1;
-                }
-            }
-
-            // Insert hoisted functions
-            for (i, func) in hoisted.into_iter().enumerate() {
-                items.insert(insert_pos + i, func);
-            }
-        }
+        // Exit scope and insert hoisted functions at module level
+        let hoisted = self.exit_scope();
+        insert_hoisted_module_items(items, hoisted);
     }
 
     fn visit_mut_stmts(&mut self, stmts: &mut Vec<Stmt>) {
-        // First pass: visit all statements
+        // Enter a new scope for this block
+        self.enter_scope();
+
+        // Visit all statements
         for stmt in stmts.iter_mut() {
             stmt.visit_mut_with(self);
         }
 
-        // Second pass: insert hoisted functions
-        if !self.hoisted_funcs.is_empty() {
-            let hoisted: Vec<Stmt> = self.hoisted_funcs.drain(..).collect();
-            let mut insert_pos = 0;
-            for (i, stmt) in stmts.iter().enumerate() {
-                if matches!(stmt, Stmt::Decl(Decl::Fn(_))) {
-                    insert_pos = i + 1;
-                }
-            }
-            for (i, func) in hoisted.into_iter().enumerate() {
-                stmts.insert(insert_pos + i, func);
-            }
-        }
+        // Exit scope and insert hoisted functions at this level
+        let hoisted = self.exit_scope();
+        insert_hoisted_stmts(stmts, hoisted);
     }
 
     /// Transform async function declarations
@@ -343,7 +386,7 @@ impl VisitMut for AsyncToNgGeneratorVisitor {
     /// function foo() { return _foo.apply(this, arguments); }
     /// function _foo() { _foo = _ngAsyncToGenerator(function* () { ... }); return _foo.apply(this, arguments); }
     fn visit_mut_fn_decl(&mut self, fn_decl: &mut FnDecl) {
-        // First visit children
+        // First visit children to handle nested async functions
         fn_decl.visit_mut_children_with(self);
 
         if !fn_decl.function.is_async {
@@ -381,8 +424,8 @@ impl VisitMut for AsyncToNgGeneratorVisitor {
             })],
         });
 
-        // Hoist the helper function
-        self.hoisted_funcs.push(Stmt::Decl(Decl::Fn(helper_fn)));
+        // Push helper to current scope (not parent scope!)
+        self.push_hoisted(Stmt::Decl(Decl::Fn(helper_fn)));
     }
 
     /// Transform async arrow functions and function expressions

@@ -1,6 +1,6 @@
 {
   "name": "swc-plugin-transform-async-to-ng-generator",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "SWC plugin to transform async functions to ng-generator functions for AngularJS $q compatibility",
   "main": "target/wasm32-wasip1/release/swc_plugin_transform_async_to_ng_generator.wasm",
   "scripts": {
