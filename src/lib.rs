@@ -48,6 +48,12 @@ pub struct AsyncToNgGeneratorVisitor {
     ref_counter: IdCounter,
 }
 
+impl Default for AsyncToNgGeneratorVisitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AsyncToNgGeneratorVisitor {
     pub fn new() -> Self {
         Self {

@@ -6,7 +6,9 @@
   "scripts": {
     "build": "cargo build --target wasm32-wasip1 --release",
     "build:debug": "cargo build --target wasm32-wasip1",
-    "prepublishOnly": "npm run build"
+    "test": "cargo test",
+    "test:update": "UPDATE=1 cargo test",
+    "prepublishOnly": "npm run test && npm run build"
   },
   "keywords": [
     "swc-plugin",
