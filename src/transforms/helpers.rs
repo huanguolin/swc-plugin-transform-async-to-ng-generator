@@ -4,7 +4,7 @@ use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::*,
-        visit::{noop_visit_mut_type, VisitMut, VisitMutWith},
+        visit::{noop_visit_mut_type, noop_visit_type, Visit, VisitMut, VisitMutWith, VisitWith},
     },
 };
 
@@ -37,6 +37,67 @@ impl VisitMut for AwaitToYieldVisitor {
     fn visit_mut_function(&mut self, _: &mut Function) {}
     fn visit_mut_arrow_expr(&mut self, _: &mut ArrowExpr) {}
 }
+
+// ============================================================================
+// HasAwaitVisitor - Check if function body contains await
+// ============================================================================
+
+/// Visitor that checks if a function body contains `await` expressions.
+///
+/// This is used to determine if an async function should be transformed.
+/// If there's no await, we can simply remove the async keyword instead
+/// of wrapping it in a generator.
+pub struct HasAwaitVisitor {
+    /// Whether any `await` expressions were found.
+    pub has_await: bool,
+}
+
+impl HasAwaitVisitor {
+    pub fn new() -> Self {
+        Self { has_await: false }
+    }
+
+    /// Check if the given block statement contains any await expressions.
+    pub fn check(body: &BlockStmt) -> bool {
+        let mut visitor = Self::new();
+        body.visit_with(&mut visitor);
+        visitor.has_await
+    }
+}
+
+impl Default for HasAwaitVisitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Visit for HasAwaitVisitor {
+    noop_visit_type!();
+
+    fn visit_expr(&mut self, expr: &Expr) {
+        // If we already found an await, no need to continue
+        if self.has_await {
+            return;
+        }
+
+        // Check if this is an await expression
+        if matches!(expr, Expr::Await(_)) {
+            self.has_await = true;
+            return;
+        }
+
+        // Recursively visit children
+        expr.visit_children_with(self);
+    }
+
+    // Don't descend into nested async functions/arrows - they have their own await scope
+    fn visit_function(&mut self, _: &Function) {}
+    fn visit_arrow_expr(&mut self, _: &ArrowExpr) {}
+}
+
+// ============================================================================
+// ThisCaptureVisitor - Capture this references
+// ============================================================================
 
 /// Visitor that captures and replaces `this` references with `_this`.
 ///

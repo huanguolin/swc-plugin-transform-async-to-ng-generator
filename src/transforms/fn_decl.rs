@@ -26,17 +26,29 @@ use crate::ast_builders::{
     apply_call, assign_expr, block, expr_stmt, fn_decl, generator_fn_expr, ident,
     ng_async_wrapper, return_stmt,
 };
-use super::helpers::create_generator_function;
+use super::helpers::{create_generator_function, HasAwaitVisitor};
 
 /// Transform an async function declaration.
 ///
 /// Returns the helper function declaration that should be hoisted.
+/// If the function has no await expressions, simply removes the async keyword
+/// and returns None (no transformation needed).
 pub fn transform_fn_decl(decl: &mut FnDecl) -> Option<FnDecl> {
     if !decl.function.is_async {
         return None;
     }
 
     let func = &mut decl.function;
+
+    // Check if the function body contains await
+    // If not, just remove async keyword - no transformation needed
+    if let Some(body) = &func.body {
+        if !HasAwaitVisitor::check(body) {
+            func.is_async = false;
+            return None;
+        }
+    }
+
     let func_name = decl.ident.sym.to_string();
     let helper_name = format!("_{}", func_name);
 

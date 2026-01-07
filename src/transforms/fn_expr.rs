@@ -32,7 +32,7 @@ use crate::ast_builders::{
     apply_call, block, generator_fn_expr, ident, iife, ng_async_wrapper,
     regular_fn_expr, return_stmt, var_decl,
 };
-use super::helpers::create_generator_function;
+use super::helpers::{create_generator_function, HasAwaitVisitor};
 
 /// Transform an async arrow function expression.
 ///
@@ -41,8 +41,24 @@ use super::helpers::create_generator_function;
 /// * `ref_name` - The unique reference name for the wrapper (e.g., "_ref", "_ref1")
 ///
 /// # Returns
-/// The transformed IIFE expression
-pub fn transform_arrow_fn(arrow: &mut ArrowExpr, ref_name: &str) -> Expr {
+/// The transformed IIFE expression, or None if transformation not needed
+/// (e.g., not async or no await expressions)
+pub fn transform_arrow_fn(arrow: &mut ArrowExpr, ref_name: &str) -> Option<Expr> {
+    if !arrow.is_async {
+        return None;
+    }
+
+    // Check if body contains await - if not, just remove async keyword
+    let has_await = match &*arrow.body {
+        BlockStmtOrExpr::BlockStmt(b) => HasAwaitVisitor::check(b),
+        BlockStmtOrExpr::Expr(e) => matches!(**e, Expr::Await(_)),
+    };
+
+    if !has_await {
+        arrow.is_async = false;
+        return None;
+    }
+
     // Extract body
     let body = match &mut *arrow.body {
         BlockStmtOrExpr::BlockStmt(b) => b.take(),
@@ -76,7 +92,7 @@ pub fn transform_arrow_fn(arrow: &mut ArrowExpr, ref_name: &str) -> Expr {
     //     var _ref = _ngAsyncToGenerator(function* () { ... });
     //     return function() { return _ref.apply(this, arguments); };
     // })()
-    iife(vec![
+    Some(iife(vec![
         // var _ref = _ngAsyncToGenerator(function* () { ... });
         var_decl(ref_name, ng_async_wrapper(generator_expr)),
         // return function() { return _ref.apply(this, arguments); };
@@ -84,7 +100,7 @@ pub fn transform_arrow_fn(arrow: &mut ArrowExpr, ref_name: &str) -> Expr {
             None,
             block(vec![return_stmt(apply_call(Expr::Ident(ident(ref_name))))]),
         )),
-    ])
+    ]))
 }
 
 /// Transform an async function expression.
@@ -95,11 +111,20 @@ pub fn transform_arrow_fn(arrow: &mut ArrowExpr, ref_name: &str) -> Expr {
 ///
 /// # Returns
 /// The transformed IIFE expression, or None if transformation not needed
+/// (e.g., not async or no await expressions)
 pub fn transform_fn_expr(fn_expr: &mut FnExpr, ref_name: &str) -> Option<Expr> {
     let func = &mut fn_expr.function;
 
     if !func.is_async {
         return None;
+    }
+
+    // Check if body contains await - if not, just remove async keyword
+    if let Some(body) = &func.body {
+        if !HasAwaitVisitor::check(body) {
+            func.is_async = false;
+            return None;
+        }
     }
 
     let body = func.body.take()?;

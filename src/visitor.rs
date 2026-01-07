@@ -246,7 +246,9 @@ impl VisitMut for AsyncToNgGeneratorVisitor {
             // async () => { ... }
             Expr::Arrow(arrow) if arrow.is_async => {
                 let ref_name = self.ref_counter.next();
-                *expr = transform_arrow_fn(arrow, &ref_name);
+                if let Some(transformed) = transform_arrow_fn(arrow, &ref_name) {
+                    *expr = transformed;
+                }
             }
 
             // async function() { ... }

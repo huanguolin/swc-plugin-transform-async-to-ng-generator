@@ -31,7 +31,7 @@ use swc_core::ecma::ast::*;
 use crate::ast_builders::{
     block, generator_fn_expr, immediate_call, ng_async_wrapper, return_stmt, this_capture,
 };
-use super::helpers::create_generator_function;
+use super::helpers::{create_generator_function, HasAwaitVisitor};
 
 /// Result of transforming an async method.
 pub struct MethodTransformResult {
@@ -73,6 +73,15 @@ pub fn transform_class_method(method: &mut ClassMethod) {
     }
 
     let func = &mut method.function;
+
+    // Check if body contains await - if not, just remove async keyword
+    if let Some(body) = &func.body {
+        if !HasAwaitVisitor::check(body) {
+            func.is_async = false;
+            return;
+        }
+    }
+
     let body = match func.body.take() {
         Some(b) => b,
         None => return,
@@ -92,6 +101,15 @@ pub fn transform_object_method(method_prop: &mut MethodProp) {
     }
 
     let func = &mut method_prop.function;
+
+    // Check if body contains await - if not, just remove async keyword
+    if let Some(body) = &func.body {
+        if !HasAwaitVisitor::check(body) {
+            func.is_async = false;
+            return;
+        }
+    }
+
     let body = match func.body.take() {
         Some(b) => b,
         None => return,
