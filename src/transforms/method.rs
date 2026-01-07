@@ -90,7 +90,7 @@ pub fn transform_class_method(method: &mut ClassMethod) {
     let result = transform_method(body);
 
     func.is_async = false;
-    func.params = vec![];
+    // Keep original params - they are accessed via closure in the generator
     func.body = Some(block(result.stmts));
 }
 
@@ -118,6 +118,6 @@ pub fn transform_object_method(method_prop: &mut MethodProp) {
     let result = transform_method(body);
 
     func.is_async = false;
-    func.params = vec![];
+    // Keep original params - they are accessed via closure in the generator
     func.body = Some(block(result.stmts));
 }

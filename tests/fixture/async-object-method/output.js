@@ -7,7 +7,7 @@ const service = {
             return data;
         })();
     },
-    save () {
+    save (data) {
         var _this = this;
         return _ngAsyncToGenerator(function*() {
             yield _this.validate(data);
